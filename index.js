@@ -108,12 +108,16 @@ async function handleUserQuery(query) {
   const todayStr = getBangkokDateStr(0);
   const yesterdayStr = getBangkokDateStr(-1);
 
-  // ตรวจจับการระบุชื่อ Location เช่น IVS06, IVS07
-  const locMatch = text.match(/ivs\s*\d+/i);
+  // ตรวจจับการระบุชื่อ Location เช่น IVS06, IVS07, OR11
+  const locMatch = text.match(/(ivs\s*\d+|or\s*\d+)/i);
   const filterLocation = locMatch ? locMatch[0].replace(/\s+/g, '') : null;
 
-  // 1. ถ้าถามเกี่ยวกับ "เมื่อวาน" ➔ แสดง Dashboard รูปแบบเดิมของเมื่อวาน
-  if (/เมื่อวาน/i.test(text)) {
+  // ตรวจสอบว่าคำถามเป็นแนว "ต้องการ Dashboard สรุปผลประจำวัน" หรือไม่
+  const hasQuestionWord = /(ไหน|อะไร|กี่|เท่าไหร่|ไหม|มั้ย|หรือยัง|ยังไง|ทำไม|เปรียบเทียบ|เทียบ|ใคร|เมื่อไหร่|ต่างกัน|มีงาน|มีจุด)/i.test(text);
+  const isExplicitDashboard = /^(สรุป|รายงาน|dashboard|report|วันนี้|ล่าสุด)(\s|$)/i.test(text) && !hasQuestionWord;
+
+  // 1. ถ้าถามเกี่ยวกับ "เมื่อวาน" แบบต้องการดูรายงาน
+  if (/เมื่อวาน/i.test(text) && !hasQuestionWord) {
     const yesterdayReport = getReportByDate(yesterdayStr);
     if (yesterdayReport) {
       return buildDashboardMessage(yesterdayReport, filterLocation);
@@ -125,10 +129,10 @@ async function handleUserQuery(query) {
     return `📌 ยังไม่มีข้อมูลรายงานในระบบครับ`;
   }
 
-  // 2. ถ้าเป็นคำถามแนว "เปรียบเทียบ" หรือ "วันไหนได้เยอะสุด" ➔ ใช้ AI วิเคราะห์จากฐานข้อมูล
-  if (/(เปรียบเทียบ|เทียบ|วันไหน.*(เยอะ|มาก|สุด)|เหลือกี่ต้น|เฉลี่ย)/i.test(text) && !/สรุป.*ivs/i.test(text)) {
+  // 2. ถ้าเป็นคำถามทั่วไป หรือคำถามวิเคราะห์ (มีคำถาม, เปรียบเทียบ, หรือถามว่ามีงานจุดไหนบ้าง ฯลฯ) ➔ ใช้ Gemini AI วิเคราะห์จากฐานข้อมูล
+  if (hasQuestionWord || (!isExplicitDashboard && !/^(สรุป|รายงาน|dashboard|report)/i.test(text))) {
     const historyContext = getHistoryContextForAI(14);
-    const aiPrompt = `คุณคือวิศวกรผู้ช่วยควบคุมงานก่อสร้างโครงการรถไฟฟ้าสายสีม่วงใต้ (MRT Purple Line)
+    const aiPrompt = `คุณคือวิศวกรผู้ช่วยควบคุมงานก่อสร้างโครงการรถไฟฟ้า (MRT Purple Line / Orange Line)
 หน้าที่ของคุณคือตอบคำถามจากวิศวกรในกลุ่มงาน โดยใช้ข้อมูลประวัติผลงานจริงที่บันทึกไว้ในระบบด้านล่างนี้:
 
 ฐานข้อมูลประวัติรายงานผลงานก่อสร้าง (ย้อนหลัง):
@@ -140,10 +144,11 @@ ${historyContext}
 
 แนวทางการตอบ:
 1. ตอบให้กระชับ ได้ใจความ ตรงประเด็นแบบวิศวกรมืออาชีพ
-2. อ้างอิงตัวเลข จำนวนต้น วันที่ (รูปแบบ DD/MM/YYYY) และจุดงาน (Location เช่น IVS06, IVS07) ให้ชัดเจน
-3. หากเป็นการเปรียบเทียบ ให้แจกแจงผลงานแต่ละวัน และสรุปผลต่าง (เช่น มากกว่า/น้อยกว่ากี่ต้น)
-4. หากถามหาวันที่ผลงานสูงสุด ให้บอกวันที่ จำนวนต้นที่ทำได้ และจุดงาน
-5. ใช้ภาษาที่สุภาพและเป็นทางการในเชิงวิศวกรรม`;
+2. ระบุจุดงาน (Location เช่น IVS06, IVS07, OR11 Zone 3-1) ประเภทงาน (Work Category / Sub-title) และตัวเลขที่เกี่ยวข้องให้ชัดเจน
+3. หากถามรายการจุดงาน (เช่น มีงานจุดไหนบ้าง) ให้สรุปรายการจุดงานทั้งหมดที่มีในระบบ พร้อมประเภทงาน ผลงานสะสม และจำนวนคงเหลือ
+4. หากเป็นการเปรียบเทียบ ให้แจกแจงผลงานแต่ละวัน และสรุปผลต่าง (เช่น มากกว่า/น้อยกว่ากี่ต้น)
+5. หากถามหาวันที่ผลงานสูงสุด ให้บอกวันที่ จำนวนต้นที่ทำได้ และจุดงาน
+6. ใช้ภาษาที่สุภาพ เป็นทางการ และจัดรูปแบบให้อ่านง่ายใน LINE`;
 
     try {
       const aiRes = await ai.models.generateContent({
