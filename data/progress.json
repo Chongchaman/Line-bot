@@ -33,25 +33,25 @@
       ],
       "updated_at": "2026-11-13T02:57:35.198Z"
     },
-    "2026-11-23": {
-      "report_date": "2026-11-23",
-      "work_category": "Grouting Work",
+    "2026-11-13": {
+      "report_date": "2026-11-13",
+      "work_category": "งานรื้อถอนเสาเข็มเดิม (Demolition of Existing Pile)",
       "locations": [
         {
-          "location_name": "OR11",
-          "start_date": "2026-11-05",
-          "target_end_date": "2026-11-23",
-          "total_qty": 9499,
+          "location_name": "OR11 (Zone 3-1)",
+          "sub_title": "Demolition Existing Pile",
+          "start_date": null,
+          "target_end_date": null,
+          "total_qty": 949,
           "daily_qty": 9,
           "accum_qty": 36,
-          "remaining_qty": 9463,
+          "remaining_qty": 913,
           "current_avg_per_day": null,
-          "note": "Summary total 36",
-          "sub_title": "MRT ORANGE LINE (WEST SECTION) PROJECT CONTRACT BANG KHUN NON - THAILAND CULTURAL CENTRE SECTION (OR11)",
-          "target_avg_per_day": null
+          "target_avg_per_day": null,
+          "note": "Summary total 36"
         }
       ],
-      "updated_at": "2026-11-13T10:41:36.918Z"
+      "updated_at": "2026-11-14T02:46:00.000Z"
     }
   }
 }
