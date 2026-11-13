@@ -1,9 +1,19 @@
-// ฟังก์ชันวาด Progress Bar 10 ช่อง
-function createProgressBar(percent) {
+// ฟังก์ชันวาด Progress Bar 10 ช่องแบบสี (Color Emoji)
+function createProgressBar(percent, fillEmoji = '🟩', emptyEmoji = '⬜') {
   const clamped = Math.max(0, Math.min(100, percent));
-  const filled = Math.round((clamped / 100) * 10);
+  let filled = Math.round((clamped / 100) * 10);
+
+  // กรณีมีผลงานเริ่มต้น (> 0%) ให้แสดงอย่างน้อย 1 ช่องสี เพื่อให้เห็นความก้าวหน้าชัดเจน
+  if (clamped > 0 && filled === 0) {
+    filled = 1;
+  }
+  // กรณีงานยังไม่เสร็จ 100% ไม่ให้ขึ้นเต็มหลอด
+  if (clamped < 100 && filled === 10) {
+    filled = 9;
+  }
+
   const empty = 10 - filled;
-  return '█'.repeat(filled) + '░'.repeat(empty);
+  return fillEmoji.repeat(filled) + emptyEmoji.repeat(empty);
 }
 
 // ฟังก์ชันแปลงวันที่ YYYY-MM-DD เป็น DD/MM/YYYY
@@ -26,6 +36,7 @@ function buildDashboardMessage(data, filterLocation = null) {
   const reportDate = data.report_date;
   let totalAll = 0;
   let accumAll = 0;
+  let overallColor = '🟩';
 
   let locations = data.locations || [];
   if (filterLocation) {
@@ -58,6 +69,7 @@ function buildDashboardMessage(data, filterLocation = null) {
 
     let statusBadge = '';
     let actionText = '';
+    let actualEmoji = '🟩';
 
     if (hasSchedule) {
       const totalDuration = diffDays(loc.start_date, loc.target_end_date) + 1;
@@ -73,23 +85,34 @@ function buildDashboardMessage(data, filterLocation = null) {
       if (isOverdue && loc.remaining_qty > 0) {
         statusBadge = `🔴 𝗦𝗧𝗔𝗧𝗨𝗦: ล่าช้ากว่าแผน ${variance.toFixed(1)}% (เกินกำหนด)`;
         actionText = `🚨 𝗔𝗰𝘁𝗶𝗼𝗻: เร่งปิดงาน ${loc.remaining_qty} ต้นสุดท้ายด่วน`;
+        actualEmoji = '🟥';
       } else if (variance < -10) {
         statusBadge = `🔴 𝗦𝗧𝗔𝗧𝗨𝗦: ช้ากว่าแผน ${variance.toFixed(1)}% (วิกฤต)`;
         const reqRate = (loc.remaining_qty / Math.max(1, daysLeft)).toFixed(1);
         actionText = `🚨 𝗔𝗰𝘁𝗶𝗼𝗻: ต้องเร่งเพิ่มเป็น ${reqRate} ต้น/วัน`;
+        actualEmoji = '🟥';
       } else if (variance < 0) {
         statusBadge = `🟡 𝗦𝗧𝗔𝗧𝗨𝗦: ต้องเร่งงาน (ช้ากว่าแผน ${variance.toFixed(1)}%)`;
         const reqRate = (loc.remaining_qty / Math.max(1, daysLeft)).toFixed(1);
         actionText = `⚡ 𝗔𝗰𝘁𝗶𝗼𝗻: ต้องเร่งเพิ่มเป็น ${reqRate} ต้น/วัน`;
+        actualEmoji = '🟨';
       } else {
         const sign = variance > 0 ? '+' : '';
         statusBadge = `🟢 𝗦𝗧𝗔𝗧𝗨𝗦: อยู่ในแผน (ไวกว่าแผน ${sign}${variance.toFixed(1)}%)`;
         actionText = `✅ 𝗔𝗰𝘁𝗶𝗼𝗻: รักษาระดับการทำงานต่อเนื่อง`;
+        actualEmoji = '🟩';
       }
     } else {
       // ไม่มีแผนระยะเวลาในแบบ ให้แสดงผลงานสะสมตามจริง
       statusBadge = `🔵 𝗦𝗧𝗔𝗧𝗨𝗦: ดำเนินงานสะสม ${actualPct.toFixed(1)}%`;
       actionText = `ℹ️ 𝗔𝗰𝘁𝗶𝗼𝗻: ติดตามผลงานประจำวันต่อเนื่อง`;
+      actualEmoji = '🟩';
+    }
+
+    if (actualEmoji === '🟥') {
+      overallColor = '🟥';
+    } else if (actualEmoji === '🟨' && overallColor !== '🟥') {
+      overallColor = '🟨';
     }
 
     // 4. ประกอบข้อความรายจุดงาน
@@ -97,9 +120,9 @@ function buildDashboardMessage(data, filterLocation = null) {
     msg += `${statusBadge}\n\n`;
 
     if (hasSchedule) {
-      msg += `Plan   [${createProgressBar(planPct)}] ${planPct.toFixed(1).padStart(5, ' ')}% (${planQty} ต้น)\n`;
+      msg += `Plan   [${createProgressBar(planPct, '🟦')}] ${planPct.toFixed(1).padStart(5, ' ')}% (${planQty} ต้น)\n`;
     }
-    msg += `Actual [${createProgressBar(actualPct)}] ${actualPct.toFixed(1).padStart(5, ' ')}% (${loc.accum_qty}/${loc.total_qty} ต้น)\n\n`;
+    msg += `Actual [${createProgressBar(actualPct, actualEmoji)}] ${actualPct.toFixed(1).padStart(5, ' ')}% (${loc.accum_qty}/${loc.total_qty} ต้น)\n\n`;
     msg += `▸ ผลงานวันนี้ : +${loc.daily_qty} ต้น (คงเหลือ ${loc.remaining_qty} ต้น)\n`;
 
     if (loc.current_avg_per_day && loc.target_avg_per_day) {
@@ -125,7 +148,7 @@ function buildDashboardMessage(data, filterLocation = null) {
   // 5. สรุปภาพรวมทั้งหมด
   const overallPct = totalAll > 0 ? (accumAll / totalAll) * 100 : 0;
   msg += `📊 𝗢𝗩𝗘𝗥𝗔𝗟𝗟 𝗦𝗨𝗠𝗠𝗔𝗥𝗬\n`;
-  msg += `[${createProgressBar(overallPct)}] ${overallPct.toFixed(1)}% (รวม ${accumAll} / ${totalAll} ต้น)\n\n`;
+  msg += `[${createProgressBar(overallPct, overallColor)}] ${overallPct.toFixed(1)}% (รวม ${accumAll} / ${totalAll} ต้น)\n\n`;
   msg += `เกณฑ์สถานะ: 🟢 ตามแผน | 🟡 เร่งงาน | 🔴 ล่าช้า`;
 
   return msg;
