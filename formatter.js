@@ -48,42 +48,57 @@ function buildDashboardMessage(data, filterLocation = null) {
     // 1. คำนวณ % Actual
     const actualPct = loc.total_qty > 0 ? (loc.accum_qty / loc.total_qty) * 100 : 0;
 
-    // 2. คำนวณ % Plan ตามระยะเวลา
-    const totalDuration = diffDays(loc.start_date, loc.target_end_date) + 1;
-    const elapsedDays = diffDays(loc.start_date, reportDate) + 1;
-    let planPct = totalDuration > 0 ? (elapsedDays / totalDuration) * 100 : 0;
-    planPct = Math.max(0, Math.min(100, planPct));
-    const planQty = Math.round((planPct / 100) * loc.total_qty);
+    // 2. คำนวณ % Plan ตามระยะเวลา (กรณีในแบบมีระบุวันเริ่มและวันสิ้นสุดจริง)
+    const hasSchedule = loc.start_date && loc.target_end_date;
+    let planPct = 0;
+    let planQty = 0;
+    let variance = 0;
+    let isOverdue = false;
+    let daysLeft = 0;
 
-    const variance = actualPct - planPct;
-    const isOverdue = new Date(reportDate) > new Date(loc.target_end_date);
-    const daysLeft = diffDays(reportDate, loc.target_end_date);
-
-    // 3. กำหนดสถานะและสีแจ้งเตือน
     let statusBadge = '';
     let actionText = '';
 
-    if (isOverdue && loc.remaining_qty > 0) {
-      statusBadge = `🔴 𝗦𝗧𝗔𝗧𝗨𝗦: ล่าช้ากว่าแผน ${variance.toFixed(1)}% (เกินกำหนด)`;
-      actionText = `🚨 𝗔𝗰𝘁𝗶𝗼𝗻: เร่งปิดงาน ${loc.remaining_qty} ต้นสุดท้ายด่วน`;
-    } else if (variance < -10) {
-      statusBadge = `🔴 𝗦𝗧𝗔𝗧𝗨𝗦: ช้ากว่าแผน ${variance.toFixed(1)}% (วิกฤต)`;
-      const reqRate = (loc.remaining_qty / Math.max(1, daysLeft)).toFixed(1);
-      actionText = `🚨 𝗔𝗰𝘁𝗶𝗼𝗻: ต้องเร่งเพิ่มเป็น ${reqRate} ต้น/วัน`;
-    } else if (variance < 0) {
-      statusBadge = `🟡 𝗦𝗧𝗔𝗧𝗨𝗦: ต้องเร่งงาน (ช้ากว่าแผน ${variance.toFixed(1)}%)`;
-      const reqRate = (loc.remaining_qty / Math.max(1, daysLeft)).toFixed(1);
-      actionText = `⚡ 𝗔𝗰𝘁𝗶𝗼𝗻: ต้องเร่งเพิ่มเป็น ${reqRate} ต้น/วัน`;
+    if (hasSchedule) {
+      const totalDuration = diffDays(loc.start_date, loc.target_end_date) + 1;
+      const elapsedDays = diffDays(loc.start_date, reportDate) + 1;
+      planPct = totalDuration > 0 ? (elapsedDays / totalDuration) * 100 : 0;
+      planPct = Math.max(0, Math.min(100, planPct));
+      planQty = Math.round((planPct / 100) * loc.total_qty);
+
+      variance = actualPct - planPct;
+      isOverdue = new Date(reportDate) > new Date(loc.target_end_date);
+      daysLeft = diffDays(reportDate, loc.target_end_date);
+
+      if (isOverdue && loc.remaining_qty > 0) {
+        statusBadge = `🔴 𝗦𝗧𝗔𝗧𝗨𝗦: ล่าช้ากว่าแผน ${variance.toFixed(1)}% (เกินกำหนด)`;
+        actionText = `🚨 𝗔𝗰𝘁𝗶𝗼𝗻: เร่งปิดงาน ${loc.remaining_qty} ต้นสุดท้ายด่วน`;
+      } else if (variance < -10) {
+        statusBadge = `🔴 𝗦𝗧𝗔𝗧𝗨𝗦: ช้ากว่าแผน ${variance.toFixed(1)}% (วิกฤต)`;
+        const reqRate = (loc.remaining_qty / Math.max(1, daysLeft)).toFixed(1);
+        actionText = `🚨 𝗔𝗰𝘁𝗶𝗼𝗻: ต้องเร่งเพิ่มเป็น ${reqRate} ต้น/วัน`;
+      } else if (variance < 0) {
+        statusBadge = `🟡 𝗦𝗧𝗔𝗧𝗨𝗦: ต้องเร่งงาน (ช้ากว่าแผน ${variance.toFixed(1)}%)`;
+        const reqRate = (loc.remaining_qty / Math.max(1, daysLeft)).toFixed(1);
+        actionText = `⚡ 𝗔𝗰𝘁𝗶𝗼𝗻: ต้องเร่งเพิ่มเป็น ${reqRate} ต้น/วัน`;
+      } else {
+        const sign = variance > 0 ? '+' : '';
+        statusBadge = `🟢 𝗦𝗧𝗔𝗧𝗨𝗦: อยู่ในแผน (ไวกว่าแผน ${sign}${variance.toFixed(1)}%)`;
+        actionText = `✅ 𝗔𝗰𝘁𝗶𝗼𝗻: รักษาระดับการทำงานต่อเนื่อง`;
+      }
     } else {
-      const sign = variance > 0 ? '+' : '';
-      statusBadge = `🟢 𝗦𝗧𝗔𝗧𝗨𝗦: อยู่ในแผน (ไวกว่าแผน ${sign}${variance.toFixed(1)}%)`;
-      actionText = `✅ 𝗔𝗰𝘁𝗶𝗼𝗻: รักษาระดับการทำงานต่อเนื่อง`;
+      // ไม่มีแผนระยะเวลาในแบบ ให้แสดงผลงานสะสมตามจริง
+      statusBadge = `🔵 𝗦𝗧𝗔𝗧𝗨𝗦: ดำเนินงานสะสม ${actualPct.toFixed(1)}%`;
+      actionText = `ℹ️ 𝗔𝗰𝘁𝗶𝗼𝗻: ติดตามผลงานประจำวันต่อเนื่อง`;
     }
 
     // 4. ประกอบข้อความรายจุดงาน
     msg += `📍 𝗜𝗩𝗦 / จุดงาน: ${loc.location_name} ${loc.sub_title ? `(${loc.sub_title})` : ''}\n`;
     msg += `${statusBadge}\n\n`;
-    msg += `Plan   [${createProgressBar(planPct)}] ${planPct.toFixed(1).padStart(5, ' ')}% (${planQty} ต้น)\n`;
+
+    if (hasSchedule) {
+      msg += `Plan   [${createProgressBar(planPct)}] ${planPct.toFixed(1).padStart(5, ' ')}% (${planQty} ต้น)\n`;
+    }
     msg += `Actual [${createProgressBar(actualPct)}] ${actualPct.toFixed(1).padStart(5, ' ')}% (${loc.accum_qty}/${loc.total_qty} ต้น)\n\n`;
     msg += `▸ ผลงานวันนี้ : +${loc.daily_qty} ต้น (คงเหลือ ${loc.remaining_qty} ต้น)\n`;
 
@@ -95,10 +110,12 @@ function buildDashboardMessage(data, filterLocation = null) {
       msg += `▸ หมายเหตุ : ${loc.note}\n`;
     }
 
-    if (isOverdue) {
-      msg += `▸ กำหนดเสร็จ : ${formatThaiDate(loc.target_end_date)} (ล่าช้า ${Math.abs(daysLeft)} วัน)\n`;
-    } else {
-      msg += `▸ กำหนดเสร็จ : ${formatThaiDate(loc.target_end_date)} (เหลือ ${daysLeft} วัน)\n`;
+    if (hasSchedule) {
+      if (isOverdue) {
+        msg += `▸ กำหนดเสร็จ : ${formatThaiDate(loc.target_end_date)} (ล่าช้า ${Math.abs(daysLeft)} วัน)\n`;
+      } else {
+        msg += `▸ กำหนดเสร็จ : ${formatThaiDate(loc.target_end_date)} (เหลือ ${daysLeft} วัน)\n`;
+      }
     }
 
     msg += `${actionText}\n`;
