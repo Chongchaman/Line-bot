@@ -1,0 +1,15 @@
+name: Keep Alive Render Bot
+
+on:
+  schedule:
+    # Run every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Webhook Health
+        run: |
+          curl -s -f https://line-bot-zsgx.onrender.com/health || echo "Pinged"
