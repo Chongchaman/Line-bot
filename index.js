@@ -172,6 +172,15 @@ ${historyContext}
   return `📌 ยังไม่มีข้อมูลรายงานความก้าวหน้าในระบบครับ (ส่งรูปภาพรายงานเข้ามาได้เลยครับ บอทจะบันทึกให้อัตโนมัติ)`;
 }
 
+// หน้าแรกสำหรับตรวจสอบสถานะเซิร์ฟเวอร์ผ่านเบราว์เซอร์ (Health Check)
+app.get('/', (req, res) => {
+  res.send('🏗️ LINE AI Construction Progress Bot (Chongchaman) is Online and Running 24/7!');
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'chongchaman-line-bot', uptime: process.uptime() });
+});
+
 // Endpoint รับ Webhook จาก LINE
 app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   res.status(200).send('OK'); // ตอบกลับ LINE ทันที
