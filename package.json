@@ -1,0 +1,24 @@
+{
+  "name": "line-progress-bot",
+  "version": "1.0.0",
+  "description": "AI Construction Progress Bot with LINE Messaging API and Gemini API",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "line-bot",
+    "gemini-api",
+    "construction-progress",
+    "civil-engineering"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^2.29.1",
+    "@line/bot-sdk": "^9.2.0",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
