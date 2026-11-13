@@ -4,11 +4,20 @@ const line = require('@line/bot-sdk');
 const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai');
 const { SYSTEM_PROMPT, RESPONSE_SCHEMA } = require('./prompt');
-const { buildDashboardMessage, formatThaiDate, getBangkokDateStr } = require('./formatter');
+const {
+  buildDashboardMessage,
+  buildSiteOverviewMessage,
+  buildHelpMenuMessage,
+  buildAiResponseCard,
+  buildNotFoundMessage,
+  formatThaiDate,
+  getBangkokDateStr
+} = require('./formatter');
 const {
   saveProgressReport,
   getReportByDate,
   getLatestReport,
+  getAllUniqueLocations,
   getHistoryContextForAI
 } = require('./db');
 
@@ -108,15 +117,26 @@ async function handleUserQuery(query) {
   const todayStr = getBangkokDateStr(0);
   const yesterdayStr = getBangkokDateStr(-1);
 
-  // ตรวจจับการระบุชื่อ Location เช่น IVS06, IVS07, OR11
+  // 1. ถ้าถามคู่มือ หรือคำสั่ง
+  if (/^(ช่วยเหลือ|คำสั่ง|help|menu|เมนู)$/i.test(text)) {
+    return buildHelpMenuMessage();
+  }
+
+  // 2. ถ้าถาม "มีงานจุดไหนบ้าง" / "มีจุดไหนบ้าง" ➔ แสดงรายการจุดงานทั้งหมด (SITE OVERVIEW)
+  if (/(มี.*(งาน|จุด).*(ไหน|อะไร|กี่)|(จุดงาน|ตำแหน่ง).*(มีอะไร|ไหนบ้าง)|(มีกี่จุด|งานมีที่ไหน))/i.test(text)) {
+    const uniqueLocations = getAllUniqueLocations();
+    return buildSiteOverviewMessage(uniqueLocations);
+  }
+
+  // ตรวจจับการระบุชื่อ Location เช่น IVS06, IVS07, OR11, OR12
   const locMatch = text.match(/(ivs\s*\d+|or\s*\d+)/i);
   const filterLocation = locMatch ? locMatch[0].replace(/\s+/g, '') : null;
 
   // ตรวจสอบว่าคำถามเป็นแนว "ต้องการ Dashboard สรุปผลประจำวัน" หรือไม่
-  const hasQuestionWord = /(ไหน|อะไร|กี่|เท่าไหร่|ไหม|มั้ย|หรือยัง|ยังไง|ทำไม|เปรียบเทียบ|เทียบ|ใคร|เมื่อไหร่|ต่างกัน|มีงาน|มีจุด)/i.test(text);
+  const hasQuestionWord = /(ไหน|อะไร|กี่|เท่าไหร่|ไหม|มั้ย|หรือยัง|ยังไง|ทำไม|เปรียบเทียบ|เทียบ|ใคร|เมื่อไหร่|ต่างกัน)/i.test(text);
   const isExplicitDashboard = /^(สรุป|รายงาน|dashboard|report|วันนี้|ล่าสุด)(\s|$)/i.test(text) && !hasQuestionWord;
 
-  // 1. ถ้าถามเกี่ยวกับ "เมื่อวาน" แบบต้องการดูรายงาน
+  // 3. ถ้าถามเกี่ยวกับ "เมื่อวาน" แบบต้องการดูรายงาน
   if (/เมื่อวาน/i.test(text) && !hasQuestionWord) {
     const yesterdayReport = getReportByDate(yesterdayStr);
     if (yesterdayReport) {
@@ -129,7 +149,7 @@ async function handleUserQuery(query) {
     return `📌 ยังไม่มีข้อมูลรายงานในระบบครับ`;
   }
 
-  // 2. ถ้าเป็นคำถามทั่วไป หรือคำถามวิเคราะห์ (มีคำถาม, เปรียบเทียบ, หรือถามว่ามีงานจุดไหนบ้าง ฯลฯ) ➔ ใช้ Gemini AI วิเคราะห์จากฐานข้อมูล
+  // 4. ถ้าเป็นคำถามทั่วไป หรือคำถามวิเคราะห์ ➔ ใช้ Gemini AI วิเคราะห์จากฐานข้อมูล และตกแต่งด้วย buildAiResponseCard
   if (hasQuestionWord || (!isExplicitDashboard && !/^(สรุป|รายงาน|dashboard|report)/i.test(text))) {
     const historyContext = getHistoryContextForAI(14);
     const aiPrompt = `คุณคือวิศวกรผู้ช่วยควบคุมงานก่อสร้างโครงการรถไฟฟ้า (MRT Purple Line / Orange Line)
@@ -144,11 +164,10 @@ ${historyContext}
 
 แนวทางการตอบ:
 1. ตอบให้กระชับ ได้ใจความ ตรงประเด็นแบบวิศวกรมืออาชีพ
-2. ระบุจุดงาน (Location เช่น IVS06, IVS07, OR11 Zone 3-1) ประเภทงาน (Work Category / Sub-title) และตัวเลขที่เกี่ยวข้องให้ชัดเจน
-3. หากถามรายการจุดงาน (เช่น มีงานจุดไหนบ้าง) ให้สรุปรายการจุดงานทั้งหมดที่มีในระบบ พร้อมประเภทงาน ผลงานสะสม และจำนวนคงเหลือ
-4. หากเป็นการเปรียบเทียบ ให้แจกแจงผลงานแต่ละวัน และสรุปผลต่าง (เช่น มากกว่า/น้อยกว่ากี่ต้น)
-5. หากถามหาวันที่ผลงานสูงสุด ให้บอกวันที่ จำนวนต้นที่ทำได้ และจุดงาน
-6. ใช้ภาษาที่สุภาพ เป็นทางการ และจัดรูปแบบให้อ่านง่ายใน LINE`;
+2. ระบุจุดงาน (Location เช่น IVS06, IVS07, OR11, OR12) ประเภทงาน (Work Category / Sub-title) และตัวเลขที่เกี่ยวข้องให้ชัดเจน
+3. หากเป็นการเปรียบเทียบ ให้แจกแจงผลงานแต่ละวัน และสรุปผลต่าง (เช่น มากกว่า/น้อยกว่ากี่ต้น)
+4. หากถามหาวันที่ผลงานสูงสุด ให้บอกวันที่ จำนวนต้นที่ทำได้ และจุดงาน
+5. ใช้ภาษาที่สุภาพ เป็นทางการ และจัดรูปแบบ bullet point ให้อ่านง่ายใน LINE (ไม่ต้องใส่ Header ซ้ำ เพราะระบบมีการ์ดครอบอยู่แล้ว)`;
 
     try {
       const aiRes = await ai.models.generateContent({
@@ -156,14 +175,14 @@ ${historyContext}
         contents: [aiPrompt],
         config: { temperature: 0.2 }
       });
-      return aiRes.text.trim();
+      return buildAiResponseCard(aiRes.text.trim());
     } catch (err) {
       console.error('[AI Query Error]:', err.message);
       return '⚠️ ขออภัยครับ ระบบไม่สามารถประมวลผลคำตอบได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง';
     }
   }
 
-  // 3. กรณีสรุปงานทั้งหมด (สรุป, สรุปวันนี้, ขอแค่วันนี้, สรุป ivs06, สรุปงาน ฯลฯ) ➔ แสดง Dashboard ฟอร์มเดิมเสมอ!
+  // 5. กรณีสรุปงานทั้งหมด (สรุป, สรุปวันนี้, ขอแค่วันนี้, สรุป ivs06, สรุปงาน ฯลฯ) ➔ แสดง Dashboard พร้อมแถบสี
   const todayReport = getReportByDate(todayStr);
   if (todayReport && !/ล่าสุด/i.test(text)) {
     return buildDashboardMessage(todayReport, filterLocation);
@@ -230,7 +249,7 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
               replyToken: event.replyToken,
               messages: [{
                 type: 'text',
-                text: '👷‍♂️ สวัสดีครับ วิศวกรสามารถพิมพ์ #ai ตามด้วยคำสั่งได้เลยครับ เช่น:\n\n• #ai สรุป\n• #ai สรุป ivs06\n• #ai สรุป ivs07\n• #ai สรุปงานเมื่อวาน\n• #ai วันไหนที่ได้โปรเกรสเยอะสุด\n• #ai เปรียบเทียบวันที่ 11 กับ 12'
+                text: buildHelpMenuMessage()
               }]
             });
             return;

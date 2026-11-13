@@ -100,10 +100,34 @@ function getHistoryContextForAI(limit = 14) {
   }).join('\n\n');
 }
 
+// ดึงรายการจุดงานทั้งหมด (Unique) พร้อมผลงานล่าสุดของแต่ละจุด
+function getAllUniqueLocations() {
+  const data = loadData();
+  const dates = Object.keys(data.records).sort().reverse();
+  const locMap = new Map();
+
+  for (const d of dates) {
+    const rec = data.records[d];
+    for (const loc of (rec.locations || [])) {
+      const key = loc.location_name.trim().toLowerCase();
+      if (!locMap.has(key)) {
+        locMap.set(key, {
+          ...loc,
+          work_category: rec.work_category,
+          latest_date: d
+        });
+      }
+    }
+  }
+
+  return Array.from(locMap.values());
+}
+
 module.exports = {
   saveProgressReport,
   getReportByDate,
   getRecentReports,
   getLatestReport,
+  getAllUniqueLocations,
   getHistoryContextForAI
 };

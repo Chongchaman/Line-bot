@@ -16,6 +16,12 @@ function createProgressBar(percent, fillEmoji = '🟩', emptyEmoji = '⬜') {
   return fillEmoji.repeat(filled) + emptyEmoji.repeat(empty);
 }
 
+// ฟังก์ชันใส่จุลภาคคั่นหลักพัน (เช่น 1,457)
+function fmtNum(n) {
+  if (n === null || n === undefined || isNaN(n)) return '-';
+  return Number(n).toLocaleString('en-US');
+}
+
 // ฟังก์ชันแปลงวันที่ YYYY-MM-DD เป็น DD/MM/YYYY
 function formatThaiDate(dateStr) {
   if (!dateStr) return '-';
@@ -44,10 +50,13 @@ function buildDashboardMessage(data, filterLocation = null) {
     const matched = locations.filter(l => l.location_name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().includes(cleanFilter));
     if (matched.length > 0) {
       locations = matched;
+    } else {
+      return buildNotFoundMessage(filterLocation);
     }
   }
 
-  let msg = `🏗️ 𝗗𝗔𝗜𝗟𝗬 𝗣𝗥𝗢𝗚𝗥𝗘𝗦𝗦 𝗥𝗘𝗣𝗢𝗥𝗧\n`;
+  const headerTitle = filterLocation ? `🎯 𝗦𝗣𝗢𝗧 𝗙𝗢𝗖𝗨𝗦 𝗥𝗘𝗣𝗢𝗥𝗧` : `🏗️ 𝗗𝗔𝗜𝗟𝗬 𝗣𝗥𝗢𝗚𝗥𝗘𝗦𝗦 𝗥𝗘𝗣𝗢𝗥𝗧`;
+  let msg = `${headerTitle}\n`;
   msg += `📌 งาน: ${data.work_category}\n`;
   msg += `📅 ข้อมูล ณ วันที่: ${formatThaiDate(reportDate)}\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -120,10 +129,10 @@ function buildDashboardMessage(data, filterLocation = null) {
     msg += `${statusBadge}\n\n`;
 
     if (hasSchedule) {
-      msg += `Plan   [${createProgressBar(planPct, '🟦')}] ${planPct.toFixed(1).padStart(5, ' ')}% (${planQty} ต้น)\n`;
+      msg += `Plan   [${createProgressBar(planPct, '🟦')}] ${planPct.toFixed(1).padStart(5, ' ')}% (${fmtNum(planQty)} ต้น)\n`;
     }
-    msg += `Actual [${createProgressBar(actualPct, actualEmoji)}] ${actualPct.toFixed(1).padStart(5, ' ')}% (${loc.accum_qty}/${loc.total_qty} ต้น)\n\n`;
-    msg += `▸ ผลงานวันนี้ : +${loc.daily_qty} ต้น (คงเหลือ ${loc.remaining_qty} ต้น)\n`;
+    msg += `Actual [${createProgressBar(actualPct, actualEmoji)}] ${actualPct.toFixed(1).padStart(5, ' ')}% (${fmtNum(loc.accum_qty)}/${fmtNum(loc.total_qty)} ต้น)\n\n`;
+    msg += `▸ ผลงานวันนี้ : +${fmtNum(loc.daily_qty)} ต้น (คงเหลือ ${fmtNum(loc.remaining_qty)} ต้น)\n`;
 
     if (loc.current_avg_per_day && loc.target_avg_per_day) {
       msg += `▸ อัตราเฉลี่ย : ${loc.current_avg_per_day} ต้น/วัน (เป้า ${loc.target_avg_per_day})\n`;
@@ -148,10 +157,99 @@ function buildDashboardMessage(data, filterLocation = null) {
   // 5. สรุปภาพรวมทั้งหมด
   const overallPct = totalAll > 0 ? (accumAll / totalAll) * 100 : 0;
   msg += `📊 𝗢𝗩𝗘𝗥𝗔𝗟𝗟 𝗦𝗨𝗠𝗠𝗔𝗥𝗬\n`;
-  msg += `[${createProgressBar(overallPct, overallColor)}] ${overallPct.toFixed(1)}% (รวม ${accumAll} / ${totalAll} ต้น)\n\n`;
+  msg += `[${createProgressBar(overallPct, overallColor)}] ${overallPct.toFixed(1)}% (รวม ${fmtNum(accumAll)} / ${fmtNum(totalAll)} ต้น)\n\n`;
   msg += `เกณฑ์สถานะ: 🟢 ตามแผน | 🟡 เร่งงาน | 🔴 ล่าช้า`;
 
   return msg;
+}
+
+// ฟังก์ชันสร้างข้อความสรุปภาพรวมจุดงานทั้งหมดในโครงการ (Site Overview)
+function buildSiteOverviewMessage(locations) {
+  if (!locations || locations.length === 0) {
+    return '📌 ยังไม่มีข้อมูลจุดงานในระบบครับ';
+  }
+
+  const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+  let totalAll = 0;
+  let accumAll = 0;
+
+  let msg = `📍 𝗦𝗜𝗧𝗘 𝗢𝗩𝗘𝗥𝗩𝗜𝗘𝗪 : จุดงานทั้งหมดในโครงการ\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+  locations.forEach((loc, index) => {
+    totalAll += loc.total_qty || 0;
+    accumAll += loc.accum_qty || 0;
+
+    const numIcon = numberEmojis[index] || `[${index + 1}]`;
+    const actualPct = loc.total_qty > 0 ? (loc.accum_qty / loc.total_qty) * 100 : 0;
+
+    // ประเมินสีหลอดตามสถานะ
+    let barColor = '🟩';
+    if (loc.start_date && loc.target_end_date && loc.latest_date) {
+      const isOverdue = new Date(loc.latest_date) > new Date(loc.target_end_date);
+      if (isOverdue && loc.remaining_qty > 0) {
+        barColor = '🟥';
+      }
+    }
+
+    const subTitleStr = loc.sub_title ? ` (${loc.sub_title})` : '';
+    const workName = loc.work_category ? loc.work_category.replace(/\(.*?\)/g, '').trim() : 'งานก่อสร้าง';
+
+    msg += `${numIcon} จุดงาน: ${loc.location_name}\n`;
+    msg += `🏗️ งาน: ${workName}${subTitleStr}\n`;
+    msg += `Actual [${createProgressBar(actualPct, barColor)}] ${actualPct.toFixed(1).padStart(5, ' ')}%\n`;
+    msg += `▸ ผลงานสะสม : ${fmtNum(loc.accum_qty)} / ${fmtNum(loc.total_qty)} ต้น (คงเหลือ ${fmtNum(loc.remaining_qty)} ต้น)\n\n`;
+  });
+
+  const overallPct = totalAll > 0 ? (accumAll / totalAll) * 100 : 0;
+  msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📊 ผลงานรวมทุกจุด : ${fmtNum(accumAll)} / ${fmtNum(totalAll)} ต้น (${overallPct.toFixed(1)}%)\n`;
+  msg += `💡 พิมพ์ "#ai สรุป [ชื่อจุด]" เช่น "#ai สรุป ivs07" เพื่อดูรายละเอียดเชิงลึก`;
+
+  return msg;
+}
+
+// ฟังก์ชันสร้างเมนูช่วยเหลือและคู่มือการใช้งาน (Help & Command Guide)
+function buildHelpMenuMessage() {
+  return `👷‍♂️ 𝗖𝗛𝗢𝗡𝗚𝗖𝗛𝗔𝗠𝗔𝗡 𝗔𝗜 𝗔𝗦𝗦𝗜𝗦𝗧𝗔𝗡𝗧
+ระบบผู้ช่วยวิศวกรควบคุมงานก่อสร้างอัจฉริยะ
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 คำสั่งดูรายงานความก้าวหน้า
+▸ #ai สรุป ➔ ดู Dashboard ประจำวันล่าสุด
+▸ #ai สรุป ivs07 ➔ เจาะจงดูเฉพาะจุดงานที่ต้องการ
+▸ #ai สรุปเมื่อวาน ➔ ดูรายงานย้อนหลังของเมื่อวาน
+
+📍 ตรวจสอบจุดงานในโครงการ
+▸ #ai มีงานจุดไหนบ้าง ➔ สรุปรายการทุกจุดงานในโครงการ
+▸ #ai แต่ละจุดเหลือกี่ต้น ➔ สรุปยอดคงเหลือรายจุด
+
+📈 วิเคราะห์และเปรียบเทียบผลงาน (AI)
+▸ #ai วันไหนได้ผลงานเยอะสุด
+▸ #ai เปรียบเทียบผลงานวันที่ 12 กับ 13
+▸ #ai จุดไหนล่าช้ากว่าแผนมากที่สุด
+▸ #ai งานรื้อถอนเสร็จหรือยัง
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📸 ส่งภาพแบบ/ตารางความก้าวหน้าเข้ากลุ่มได้ตลอดเวลา บอทจะบันทึกข้อมูลให้อัตโนมัติ (เงียบสนิท ไม่รบกวนกลุ่ม)`;
+}
+
+// ฟังก์ชันตกแต่งคำตอบจาก Gemini AI ให้อยู่ในฟอร์มวิศวกรที่สวยงาม
+function buildAiResponseCard(answerText) {
+  return `📊 𝗔𝗜 𝗘𝗡𝗚𝗜𝗡𝗘𝗘𝗥𝗜𝗡𝗚 𝗔𝗡𝗔𝗟𝗬𝗦𝗜𝗦
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+${answerText}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 สอบถามข้อมูลอื่น พิมพ์ "#ai [คำถาม]" ได้เลยครับ`;
+}
+
+// ฟังก์ชันแจ้งเตือนกรณีค้นหาไม่พบข้อมูล
+function buildNotFoundMessage(searchedTerm) {
+  return `ℹ️ 𝗡𝗢𝗧𝗜𝗙𝗜𝗖𝗔𝗧𝗜𝗢𝗡
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ ไม่พบข้อมูลจุดงาน "${searchedTerm}" ในระบบครับ
+
+💡 พิมพ์ "#ai มีงานจุดไหนบ้าง" เพื่อตรวจสอบรายชื่อจุดงานที่มีข้อมูลในระบบ`;
 }
 
 // ฟังก์ชันดึงวันที่ปัจจุบันในเวลาไทย (YYYY-MM-DD)
@@ -166,7 +264,12 @@ function getBangkokDateStr(offsetDays = 0) {
 }
 
 module.exports = {
+  createProgressBar,
   buildDashboardMessage,
+  buildSiteOverviewMessage,
+  buildHelpMenuMessage,
+  buildAiResponseCard,
+  buildNotFoundMessage,
   formatThaiDate,
   getBangkokDateStr
 };

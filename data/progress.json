@@ -49,6 +49,19 @@
           "current_avg_per_day": null,
           "target_avg_per_day": null,
           "note": "Summary total 36"
+        },
+        {
+          "location_name": "OR12",
+          "sub_title": "TBM Launching",
+          "start_date": null,
+          "target_end_date": null,
+          "total_qty": 274,
+          "daily_qty": 28,
+          "accum_qty": 28,
+          "remaining_qty": 246,
+          "current_avg_per_day": null,
+          "target_avg_per_day": null,
+          "note": "Ground Improvement"
         }
       ],
       "updated_at": "2026-11-14T02:46:00.000Z"
